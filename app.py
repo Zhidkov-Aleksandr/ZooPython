@@ -1,11 +1,20 @@
 from aiogram import types
 from aiogram.types import ReplyKeyboardMarkup, ReplyKeyboardRemove
-from loader import dp
+
 from data.config import ADMINS
+from aiogram import executor
+from logging import basicConfig, INFO
+from loader import dp, db, bot
+from filters import IsAdmin
+from handlers.user.menu import settings
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.callback_data import CallbackData
+
+import handlers
+
 
 user_message = 'Пользователь'
 admin_message = 'Админ'
-
 
 @dp.message_handler(commands='start')
 async def cmd_start(message: types.Message):
@@ -15,7 +24,7 @@ async def cmd_start(message: types.Message):
 
     await message.answer('''Привет! 👋
 
-🤖 Я бот-магазин по подаже товаров любой категории.
+🤖 Я бот зоопарка
 
 🛍️ Чтобы перейти в каталог и выбрать приглянувшиеся 
 товары возпользуйтесь командой /menu.
@@ -41,3 +50,12 @@ async def user_mode(message: types.Message):
 
     await message.answer('Включен пользовательский режим.',
                          reply_markup=ReplyKeyboardRemove())
+
+async def on_startup(dp):
+    basicConfig(level=INFO)
+    db.create_tables()
+
+if __name__ == '__main__':
+    executor.start_polling(dp, on_startup=on_startup, skip_updates=False)
+
+
