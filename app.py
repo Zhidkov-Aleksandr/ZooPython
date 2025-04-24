@@ -39,7 +39,7 @@ async def admin_mode(message: types.Message):
     if cid not in ADMINS:
         ADMINS.append(cid)
 
-    await message.answer('Включен админский режим.',
+    await message.answer('Включен админский режим /menu.',
                          reply_markup=ReplyKeyboardRemove())
 
 @dp.message_handler(text=user_message)
@@ -48,7 +48,7 @@ async def user_mode(message: types.Message):
     if cid in ADMINS:
         ADMINS.remove(cid)
 
-    await message.answer('Включен пользовательский режим.',
+    await message.answer('Включен пользовательский режим /menu.',
                          reply_markup=ReplyKeyboardRemove())
 
 async def on_startup(dp):
