@@ -11,6 +11,7 @@ from states import CategoryState
 from filters import IsAdmin
 from loader import dp, db, bot
 from states import ProductState
+from aiogram.types import ContentType
 
 category_cb = CallbackData('category', 'id', 'action')
 product_cb = CallbackData('product', 'id', 'action')
@@ -19,6 +20,7 @@ cancel_message = '🚫 Отменить'
 add_product = '➕ Добавить товар'
 delete_category = '🗑️ Удалить категорию'
 back_message = '👈 Назад'
+all_right_message = '✅ Все верно'
 
 @dp.message_handler(IsAdmin(), text=settings)
 async def process_settings(message: Message):
@@ -136,6 +138,13 @@ def back_markup():
 
     return markup
 
+def check_markup():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+    markup.row(back_message, all_right_message)
+
+    return markup
+
+
 @dp.message_handler(IsAdmin(), text=back_message, state=ProductState.title)
 async def process_title_back(message: Message, state: FSMContext):
     await process_add_product(message)
@@ -154,3 +163,76 @@ async def process_body(message: Message, state: FSMContext):
 
     await ProductState.next()
     await message.answer('Фото?', reply_markup=back_markup())
+
+@dp.message_handler(IsAdmin(), content_types=ContentType.PHOTO,
+                    state=ProductState.image)
+async def process_image_photo(message: Message, state: FSMContext):
+    fileID = message.photo[-1].file_id
+    file_info = await bot.get_file(fileID)
+    downloaded_file = (await bot.download_file(file_info.file_path)).read()
+
+    async with state.proxy() as data:
+        data['image'] = downloaded_file
+
+    await ProductState.next()
+    await message.answer('Цена?', reply_markup=back_markup())
+
+
+@dp.message_handler(IsAdmin(), lambda message: message.text.isdigit(),
+                    state=ProductState.price)
+async def process_price(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['price'] = message.text
+
+        title = data['title']
+        body = data['body']
+        price = data['price']
+
+        await ProductState.next()
+        text = f'<b>{title}</b>\n\n{body}\n\nЦена: {price} рублей.'
+
+        markup = check_markup()
+
+        await message.answer_photo(photo=data['image'],
+                                   caption=text,
+                                   reply_markup=markup)
+
+@dp.message_handler(IsAdmin(), text=all_right_message,
+                    state=ProductState.confirm)
+async def process_confirm(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        title = data['title']
+        body = data['body']
+        image = data['image']
+        price = data['price']
+
+        tag = db.fetchone(
+            'SELECT title FROM categories WHERE idx=?',
+            (data['category_index'],))[0]
+        idx = md5(' '.join([title, body, price, tag]
+                           ).encode('utf-8')).hexdigest()
+
+        db.query('INSERT INTO products VALUES (?, ?, ?, ?, ?, ?)',
+                 (idx, title, body, image, int(price), tag))
+
+    await state.finish()
+    await message.answer('Готово!', reply_markup=ReplyKeyboardRemove())
+    await process_settings(message)
+
+
+@dp.callback_query_handler(IsAdmin(), product_cb.filter(action='delete'))
+async def delete_product_callback_handler(query: CallbackQuery,
+                                          callback_data: dict):
+    product_idx = callback_data['id']
+    db.query('DELETE FROM products WHERE idx=?', (product_idx,))
+    await query.answer('Удалено!')
+    await query.message.delete()
+
+@dp.message_handler(IsAdmin(), text=back_message, state=ProductState.confirm)
+async def process_confirm_back(message: Message, state: FSMContext):
+    await ProductState.price.set()
+
+    async with state.proxy() as data:
+        await message.answer(f"Изменить цену с <b>{data['price']}</b>?",
+                             reply_markup=back_markup())
+
