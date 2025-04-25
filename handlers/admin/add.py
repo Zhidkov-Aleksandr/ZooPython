@@ -1,4 +1,4 @@
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, ReplyKeyboardRemove
 from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.callback_data import CallbackData
 from aiogram.types.chat import ChatActions
@@ -10,7 +10,7 @@ from handlers.user.menu import settings
 from states import CategoryState
 from filters import IsAdmin
 from loader import dp, db, bot
-
+from states import ProductState
 
 category_cb = CallbackData('category', 'id', 'action')
 product_cb = CallbackData('product', 'id', 'action')
@@ -18,7 +18,7 @@ product_cb = CallbackData('product', 'id', 'action')
 cancel_message = '🚫 Отменить'
 add_product = '➕ Добавить товар'
 delete_category = '🗑️ Удалить категорию'
-
+back_message = '👈 Назад'
 
 @dp.message_handler(IsAdmin(), text=settings)
 async def process_settings(message: Message):
@@ -88,3 +88,69 @@ async def show_products(m, products, category_idx):
 
     await m.answer('Хотите что-нибудь добавить или удалить?',
                    reply_markup=markup)
+
+@dp.message_handler(IsAdmin(), text=delete_category)
+async def delete_category_handler(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        if 'category_index' in data.keys():
+            idx = data['category_index']
+
+            db.query(
+                'DELETE FROM products WHERE tag IN (SELECT '
+                'title FROM categories WHERE idx=?)',
+                (idx,))
+            db.query('DELETE FROM categories WHERE idx=?', (idx,))
+
+            await message.answer('Готово!', reply_markup=ReplyKeyboardRemove())
+            await process_settings(message)
+
+@dp.message_handler(IsAdmin(), text=add_product)
+async def process_add_product(message: Message):
+    await ProductState.title.set()
+
+    markup = ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(cancel_message)
+
+    await message.answer('Название?', reply_markup=markup)
+
+@dp.message_handler(IsAdmin(), text=cancel_message, state=ProductState.title)
+async def process_cancel(message: Message, state: FSMContext):
+    await message.answer('Ок, отменено!', reply_markup=ReplyKeyboardRemove())
+    await state.finish()
+
+    await process_settings(message)
+
+@dp.message_handler(IsAdmin(), state=ProductState.title)
+async def process_title(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['title'] = message.text
+
+    await ProductState.next()
+    await message.answer('Описание?', reply_markup=back_markup())
+
+
+
+def back_markup():
+    markup = ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+    markup.add(back_message)
+
+    return markup
+
+@dp.message_handler(IsAdmin(), text=back_message, state=ProductState.title)
+async def process_title_back(message: Message, state: FSMContext):
+    await process_add_product(message)
+
+@dp.message_handler(IsAdmin(), text=back_message, state=ProductState.body)
+async def process_body_back(message: Message, state: FSMContext):
+    await ProductState.title.set()
+    async with state.proxy() as data:
+        await message.answer(f"Изменить название с <b>{data['title']}</b>?",
+                             reply_markup=back_markup())
+
+@dp.message_handler(IsAdmin(), state=ProductState.body)
+async def process_body(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['body'] = message.text
+
+    await ProductState.next()
+    await message.answer('Фото?', reply_markup=back_markup())
