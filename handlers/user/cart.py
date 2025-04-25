@@ -16,9 +16,9 @@ from loader import db, dp, bot
 from .menu import cart
 from keyboards.inline.products_from_cart import product_markup
 from aiogram.types import CallbackQuery
-
+from states import CheckoutState
 from keyboards.inline.products_from_catalog import product_cb
-
+from keyboards.default.markups import *
 
 
 @dp.message_handler(IsUser(), text=cart)
@@ -117,3 +117,119 @@ async def product_callback_handler(query: CallbackQuery, callback_data: dict,
 
                     await query.message.edit_reply_markup(
                         product_markup(idx, count_in_cart))
+
+
+
+@dp.message_handler(IsUser(), text='📦 Оформить заказ')
+async def process_checkout(message: Message, state: FSMContext):
+
+    await CheckoutState.check_cart.set()
+    await checkout(message, state)
+
+
+async def checkout(message, state):
+    answer = ''
+    total_price = 0
+
+    async with state.proxy() as data:
+
+        for title, price, count_in_cart in data['products'].values():
+
+            tp = count_in_cart * price
+            answer += f'<b>{title}</b> * {count_in_cart}шт. = {tp}₽\n'
+            total_price += tp
+
+    await message.answer(f'{answer}\nОбщая сумма заказа: {total_price}₽.',
+                         reply_markup=check_markup())
+
+
+@dp.message_handler(IsUser(),
+                    lambda message: message.text not in [all_right_message,
+                                                         back_message],
+                    state=CheckoutState.check_cart)
+async def process_check_cart_invalid(message: Message):
+    await message.reply('Такого варианта не было.')
+
+
+@dp.message_handler(IsUser(), text=back_message,
+                    state=CheckoutState.check_cart)
+async def process_check_cart_back(message: Message, state: FSMContext):
+    await state.finish()
+    await process_cart(message, state)
+
+@dp.message_handler(IsUser(), text=all_right_message,
+                    state=CheckoutState.check_cart)
+async def process_check_cart_all_right(message: Message, state: FSMContext):
+    await CheckoutState.next()
+    await message.answer('Укажите свое имя.',
+                         reply_markup=back_markup())
+
+@dp.message_handler(IsUser(), text=back_message, state=CheckoutState.name)
+async def process_name_back(message: Message, state: FSMContext):
+    await CheckoutState.check_cart.set()
+    await checkout(message, state)
+
+@dp.message_handler(IsUser(), state=CheckoutState.name)
+async def process_name(message: Message, state: FSMContext):
+
+    async with state.proxy() as data:
+
+        data['name'] = message.text
+
+        if 'address' in data.keys():
+
+            await confirm(message)
+            await CheckoutState.confirm.set()
+
+        else:
+
+            await CheckoutState.next()
+            await message.answer('Укажите свой адрес места жительства.',
+                                 reply_markup=back_markup())
+
+
+@dp.message_handler(IsUser(), text=back_message, state=CheckoutState.address)
+async def process_address_back(message: Message, state: FSMContext):
+
+    async with state.proxy() as data:
+
+        await message.answer('Изменить имя с <b>' + data['name'] + '</b>?',
+                             reply_markup=back_markup())
+
+    await CheckoutState.name.set()
+
+
+@dp.message_handler(IsUser(), state=CheckoutState.address)
+async def process_address(message: Message, state: FSMContext):
+
+    async with state.proxy() as data:
+        data['address'] = message.text
+
+    await confirm(message)
+    await CheckoutState.next()
+
+
+async def confirm(message):
+    await message.answer(
+        'Убедитесь, что все правильно оформлено и подтвердите заказ.',
+        reply_markup=confirm_markup())
+
+@dp.message_handler(IsUser(),
+                    lambda message: message.text not in [confirm_message,
+                                                         back_message],
+                    state=CheckoutState.confirm)
+async def process_confirm_invalid(message: Message):
+    await message.reply('Такого варианта не было.')
+
+
+@dp.message_handler(IsUser(), text=back_message, state=CheckoutState.confirm)
+async def process_confirm(message: Message, state: FSMContext):
+
+    await CheckoutState.address.set()
+
+    async with state.proxy() as data:
+        await message.answer('Изменить адрес с <b>' + data['address'] + '</b>?',
+                             reply_markup=back_markup())
+
+
+
