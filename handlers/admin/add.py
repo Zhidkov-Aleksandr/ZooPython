@@ -12,15 +12,16 @@ from filters import IsAdmin
 from loader import dp, db, bot
 from states import ProductState
 from aiogram.types import ContentType
+from keyboards.default.markups import *
+
 
 category_cb = CallbackData('category', 'id', 'action')
 product_cb = CallbackData('product', 'id', 'action')
 
-cancel_message = '🚫 Отменить'
+
 add_product = '➕ Добавить товар'
 delete_category = '🗑️ Удалить категорию'
-back_message = '👈 Назад'
-all_right_message = '✅ Все верно'
+
 
 @dp.message_handler(IsAdmin(), text=settings)
 async def process_settings(message: Message):
@@ -129,21 +130,6 @@ async def process_title(message: Message, state: FSMContext):
 
     await ProductState.next()
     await message.answer('Описание?', reply_markup=back_markup())
-
-
-
-def back_markup():
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.add(back_message)
-
-    return markup
-
-def check_markup():
-    markup = ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-    markup.row(back_message, all_right_message)
-
-    return markup
-
 
 @dp.message_handler(IsAdmin(), text=back_message, state=ProductState.title)
 async def process_title_back(message: Message, state: FSMContext):
