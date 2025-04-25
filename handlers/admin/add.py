@@ -236,3 +236,42 @@ async def process_confirm_back(message: Message, state: FSMContext):
         await message.answer(f"Изменить цену с <b>{data['price']}</b>?",
                              reply_markup=back_markup())
 
+@dp.message_handler(IsAdmin(), content_types=ContentType.TEXT,
+                    state=ProductState.image)
+async def process_image_url(message: Message, state: FSMContext):
+    if message.text == back_message:
+
+        await ProductState.body.set()
+
+        async with state.proxy() as data:
+
+            await message.answer(f"Изменить описание с <b>{data['body']}</b>?",
+                                 reply_markup=back_markup())
+
+    else:
+
+        await message.answer('Вам нужно прислать фото товара.')
+
+@dp.message_handler(IsAdmin(), lambda message: not message.text.isdigit(),
+                    state=ProductState.price)
+async def process_price_invalid(message: Message, state: FSMContext):
+    if message.text == back_message:
+
+        await ProductState.image.set()
+
+        async with state.proxy() as data:
+
+            await message.answer("Другое изображение?",
+                                 reply_markup=back_markup())
+
+    else:
+
+        await message.answer('Укажите цену в виде числа!')
+
+
+@dp.message_handler(IsAdmin(),
+                    lambda message: message.text not in [back_message,
+                                                         all_right_message],
+                    state=ProductState.confirm)
+async def process_confirm_invalid(message: Message, state: FSMContext):
+    await message.answer('Такого варианта не было.')
