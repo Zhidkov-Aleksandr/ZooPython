@@ -49,3 +49,14 @@ async def show_products(m, products):
             await m.answer_photo(photo=image,
                                  caption=text,
                                  reply_markup=markup)
+
+
+from keyboards.inline.products_from_catalog import product_cb
+@dp.callback_query_handler(IsUser(), product_cb.filter(action='add'))
+async def add_product_callback_handler(query: CallbackQuery,
+                                       callback_data: dict):
+    db.query('INSERT INTO cart VALUES (?, ?, 1)',
+             (query.message.chat.id, callback_data['id']))
+
+    await query.answer('Товар добавлен в корзину!')
+    await query.message.delete()
