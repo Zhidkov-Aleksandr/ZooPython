@@ -19,6 +19,9 @@ from aiogram.types import CallbackQuery
 from states import CheckoutState
 from keyboards.inline.products_from_catalog import product_cb
 from keyboards.default.markups import *
+from aiogram.types import ReplyKeyboardMarkup, ReplyKeyboardRemove
+import logging
+
 
 
 @dp.message_handler(IsUser(), text=cart)
@@ -231,5 +234,33 @@ async def process_confirm(message: Message, state: FSMContext):
         await message.answer('Изменить адрес с <b>' + data['address'] + '</b>?',
                              reply_markup=back_markup())
 
+
+
+@dp.message_handler(IsUser(), text=confirm_message,
+                    state=CheckoutState.confirm)
+async def process_confirm(message: Message, state: FSMContext):
+
+    markup = ReplyKeyboardRemove()
+
+
+    logging.info('Deal was made.')
+
+    async with state.proxy() as data:
+        cid = message.chat.id
+        products = [idx + '=' + str(quantity)
+                    for idx, quantity in db.fetchall('''SELECT idx, quantity FROM cart
+        WHERE cid=?''', (cid,))]
+
+        db.query('INSERT INTO orders VALUES (?, ?, ?, ?)',
+                 (cid, data['name'], data['address'], ' '.join(products)))
+
+        db.query('DELETE FROM cart WHERE cid=?', (cid,))
+
+        await message.answer(
+            'Ок! Ваш заказ уже в пути 🚀\nИмя: <b>' + data[
+                'name'] + '</b>\nАдрес: <b>' + data['address'] + '</b>',
+            reply_markup=markup)
+
+    await state.finish()
 
 
