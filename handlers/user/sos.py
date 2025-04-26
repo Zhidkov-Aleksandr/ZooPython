@@ -1,7 +1,6 @@
 from aiogram.dispatcher import FSMContext
 from aiogram.types import ReplyKeyboardMarkup, ReplyKeyboardRemove
-from keyboards.default.markups import all_right_message, cancel_message, \
-    submit_markup
+from keyboards.default.markups import all_right_message, cancel_message, submit_markup
 from aiogram.types import Message
 from states import SosState
 from filters import IsUser
@@ -16,6 +15,8 @@ async def cmd_sos(message: Message):
         ' и администратор обязательно вам ответит.',
         reply_markup=ReplyKeyboardRemove())
 
+
+
 @dp.message_handler(state=SosState.question)
 async def process_question(message: Message, state: FSMContext):
     async with state.proxy()as data:
@@ -24,6 +25,7 @@ async def process_question(message: Message, state: FSMContext):
     await message.answer('Убедитесь, что все верно.',
                          reply_markup=submit_markup())
     await SosState.next()
+
 
 @dp.message_handler(
     lambda message: message.text not in [cancel_message, all_right_message],

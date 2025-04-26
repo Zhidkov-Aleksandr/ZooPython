@@ -33,6 +33,9 @@ async def process_questions(message: Message):
 
             await message.answer(question, reply_markup=markup)
 
+
+
+
 @dp.callback_query_handler(IsAdmin(), question_cb.filter(action='answer'))
 async def process_answer(query: CallbackQuery, callback_data: dict,
                          state: FSMContext):
@@ -43,10 +46,25 @@ async def process_answer(query: CallbackQuery, callback_data: dict,
                                reply_markup=ReplyKeyboardRemove())
     await AnswerState.answer.set()
 
+
+
+
 @dp.message_handler(IsAdmin(), text=cancel_message, state=AnswerState.submit)
 async def process_send_answer(message: Message, state: FSMContext):
     await message.answer('Отменено!', reply_markup=ReplyKeyboardRemove())
     await state.finish()
+
+@dp.message_handler(IsAdmin(), state=AnswerState.answer)
+async def process_submit(message: Message, state: FSMContext):
+    async with state.proxy() as data:
+        data['answer'] = message.text
+
+    await AnswerState.next()
+    await message.answer('Убедитесь, что не ошиблись в ответе.',
+                         reply_markup=submit_markup())
+
+
+
 
 
 @dp.message_handler(IsAdmin(), text=all_right_message, state=AnswerState.submit)
