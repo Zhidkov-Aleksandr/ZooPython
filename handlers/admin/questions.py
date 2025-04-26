@@ -47,3 +47,22 @@ async def process_answer(query: CallbackQuery, callback_data: dict,
 async def process_send_answer(message: Message, state: FSMContext):
     await message.answer('Отменено!', reply_markup=ReplyKeyboardRemove())
     await state.finish()
+
+
+@dp.message_handler(IsAdmin(), text=all_right_message, state=AnswerState.submit)
+async def process_send_answer(message: Message, state: FSMContext):
+
+    async with state.proxy() as data:
+
+        answer = data['answer']
+        cid = data['cid']
+
+        question = db.fetchone(
+            'SELECT question FROM questions WHERE cid=?', (cid,))[0]
+        db.query('DELETE FROM questions WHERE cid=?', (cid,))
+        text = f'Вопрос: <b>{question}</b>\n\nОтвет: <b>{answer}</b>'
+
+        await message.answer('Отправлено!', reply_markup=ReplyKeyboardRemove())
+        await bot.send_message(cid, text)
+
+    await state.finish()
