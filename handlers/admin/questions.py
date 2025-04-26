@@ -42,3 +42,8 @@ async def process_answer(query: CallbackQuery, callback_data: dict,
     await query.message.answer('Напиши ответ.',
                                reply_markup=ReplyKeyboardRemove())
     await AnswerState.answer.set()
+
+@dp.message_handler(IsAdmin(), text=cancel_message, state=AnswerState.submit)
+async def process_send_answer(message: Message, state: FSMContext):
+    await message.answer('Отменено!', reply_markup=ReplyKeyboardRemove())
+    await state.finish()
